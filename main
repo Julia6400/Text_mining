@@ -1,0 +1,444 @@
+#libraries
+
+library(tidyverse)
+library(tidytext)
+library(tm)
+library(textreadr)
+library(textstem)
+library(wordcloud)
+library(wordcloud2)
+library(plotrix)
+library(textdata)
+library(topicmodels)
+library(stopwords)
+library(corpus)
+library(ggplot2)
+library(hrbrthemes)
+library(lubridate)
+
+
+#path and files
+
+setwd("C:/Users/48502/Desktop/studia/r/projekt/dane/Zaliczenie")
+load('Projekt_zal_dane.RData')
+
+
+slownik_wydzwieku <- read.csv('slownikWydzwieku01.csv', sep = '\t',
+              encoding = 'UTF-8', header = F)
+
+names(slownik_wydzwieku) <- c('slowo', 'V2' ,'czy_emocja', 'sent_bin', 'sent_dysk', 'sent_so_pmi') 
+head(slownik_wydzwieku)
+
+
+pl_words_sentiment <- read.csv("nawl-analysis.csv", fileEncoding = 'UTF-8',
+                               stringsAsFactors = F)
+
+Sys.setlocale("LC_TIME", "C")
+
+
+#the scope of data
+
+articles <- articles %>%
+  mutate(date = str_extract(date, '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9]*'))
+
+
+a<-articles$date
+Sys.setlocale("LC_TIME", "C")
+articles$date <- as.Date(a)
+
+
+articles <- articles %>%
+  filter(date> '2019-12-01', date < '2020-02-01')
+
+
+#bulding Corpus for body
+
+articles_body <- articles[c(4,6,1,2,3,5)]
+colnames(articles_body)[which(names(articles_body) == "date")] <- "doc_id"
+colnames(articles_body)[which(names(articles_body) == "body")] <- "text"
+head(articles_body)
+
+articles_body <- data.frame(articles_body)
+corpus <-VCorpus(DataframeSource(articles_body))
+
+dfCorpus <- tm_map(corpus, content_transformer(tolower))
+dfCorpus <- tm_map(dfCorpus, removeWords, stopwords::stopwords("pl", source = "stopwords-iso"))
+dfCorpus <- tm_map(dfCorpus, removePunctuation)
+dfCorpus <- tm_map(dfCorpus, removeNumbers)
+dfCorpus <- tm_map(dfCorpus, stripWhitespace)
+dfCorpus <- tm_map(dfCorpus, removeWords, c("bancfif","dfpparamsslotsrectangle","divid","ifdfpparamsslotsmidboard", "grudnia","stycznia","gazeta",
+                                            "midboard", "putbandfpinviewobject", "unitsize", "zobacz", "null", "slot","banc",
+                                            "ifdfpparamsslotscontentboarddfpparamsslotscontentboardautoloadifwindowadviewdfpadviewdfpscrollslotadviewdfpscrollslotpushcontentboardifwindowadviewadstagwindowadviewadstagautoloadslotpushcontentboardelsegoogletagcmdpushfunctiongoogletagdisplaydivgptadcontentboard", "reklama", "wideo"
+))
+
+
+dataframe <- 
+  data.frame(id=sapply(dfCorpus, meta, "id"),
+             text=unlist(lapply(sapply(dfCorpus, '[', "content"),paste,collapse="\n")),
+             stringsAsFactors=FALSE)
+
+
+dataframe$year <- format(as.Date(dataframe$id), "%Y")
+dataframe$month <- format(as.Date(dataframe$id), "%m")
+dataframe$data <- format(as.Date(dataframe$id), "%Y-%m")
+head(dataframe)
+
+
+#Bulding Corpus for lead
+
+articles_lead <- articles[c(4,5,1,2,3,6)]
+colnames(articles_lead)[which(names(articles_lead) == "date")] <- "doc_id"
+colnames(articles_lead)[which(names(articles_lead) == "lead")] <- "text"
+head(articles_lead)
+
+
+articles_lead <- data.frame(articles_lead)
+corpus2 <-VCorpus(DataframeSource(articles_lead))
+
+dfCorpus2 <- tm_map(corpus2, content_transformer(tolower))
+dfCorpus2 <- tm_map(dfCorpus2, removePunctuation)
+dfCorpus2 <- tm_map(dfCorpus2, removeNumbers)
+dfCorpus2 <- tm_map(dfCorpus2, stripWhitespace)
+dfCorpus2 <- tm_map(dfCorpus2, removeWords, stopwords::stopwords("pl", source = "stopwords-iso"))
+dfCorpus <- tm_map(dfCorpus, removeWords, c("gazetapl","grudnia","stycznia"))
+
+
+dataframe2 <- 
+  data.frame(id=sapply(dfCorpus2, meta, "id"),
+             text=unlist(lapply(sapply(dfCorpus2, '[', "content"),paste,collapse="\n")),
+             stringsAsFactors=FALSE)
+
+
+dataframe2$year <- format(as.Date(dataframe2$id), "%Y")
+dataframe2$month <- format(as.Date(dataframe2$id), "%m")
+dataframe2$data <- format(as.Date(dataframe2$id), "%Y-%m")
+head(dataframe2)
+
+
+
+#wordtokens for lead for words with characters > 4
+
+word_tokens <- dataframe2 %>% 
+  unnest_tokens(word, text) %>% 
+  filter(!str_detect(word, '\\d')) %>% 
+  filter(nchar(word) > 4)
+word_tokens
+
+word_count <- word_tokens %>% 
+  count(word)%>% 
+  arrange(desc(n))
+word_count
+
+
+#wordtokens for body for word with characters > 4
+
+word_tokens_2 <- dataframe %>% 
+  unnest_tokens(word, text, drop = FALSE) %>% 
+  select(-text) %>% 
+  filter(!str_detect(word, '\\d')) %>% 
+  filter(nchar(word) > 4)
+word_tokens_2
+
+word_count_2 <- word_tokens_2 %>% 
+  count(word)%>% 
+  arrange(desc(n))
+
+
+#wordcloud for lead
+
+par(mar = c(0, 0, 0, 0)) 
+wordcloud(word_count$word, 
+          word_count$n, max.words = 150, 
+          rot.per = 0.20, colors = brewer.pal(15, "Paired"))
+
+
+#wordcloud for body
+
+par(mar = c(0, 0, 0, 0)) 
+wordcloud(word_count_2$word, 
+          word_count_2$n, max.words = 150, 
+          rot.per = 0.20, colors = brewer.pal(15, "Paired"))
+
+
+
+
+
+#wordtops for lead (30)
+
+word_top <- word_tokens %>% 
+  count(year, word, sort = T) %>% 
+  group_by(year) %>% 
+  top_n(30, n) %>% 
+  ungroup() %>% 
+  mutate(word = reorder(word, n))
+word_top
+
+ggplot(word_top, aes(x = reorder_within(word, n, year), y = n, fill = year)) +
+  geom_col(show.legend = F) +
+  coord_flip() +
+  facet_wrap(~year, scales ="free_y" ) +
+  scale_x_reordered()+
+  ylab("ilość słów")+
+  xlab("słowa")+ ggtitle("Top 30 słów dla lead")
+
+
+
+#timeline for 3 chosen word lead
+
+slowa_w_czasie <- word_tokens %>%
+  count(id, word, sort = T) %>%
+  complete(id, word, fill = list(n=0)) %>%
+  group_by(id) %>%
+  filter(word %in% c("prezydent", "sprawiedliwości", "senatu"))
+  slowa_w_czasie
+
+  ggplot(data = slowa_w_czasie, aes(id, n, group = 1, color = word)) + 
+    geom_point()+
+    geom_line() + 
+    geom_smooth()+ 
+    ylab("ilość słów")+
+    xlab("data")+
+    facet_grid(word ~ ., scales = 'free_y')+
+    theme(axis.text.x = element_text(angle = 90))
+
+
+
+#wordtops for body (10)
+
+word_top_2 <- word_tokens_2 %>% 
+  count(year, word, sort = T) %>% 
+  group_by(year) %>% 
+  top_n(10, n) %>% 
+  ungroup() %>% 
+  mutate(word = reorder(word, n))
+word_top_2
+
+
+ggplot(word_top_2, aes(x = reorder_within(word, n, year), y = n, fill = year)) +
+  geom_col(show.legend = F) +
+  coord_flip() +
+  facet_wrap(~year, scales ="free_y" ) +
+  scale_x_reordered()+
+  ylab("ilość słów")+
+  xlab("słowa")+ ggtitle("Top 10 słów dla body")
+
+
+
+
+
+# sentyment analysc for lead
+
+slowa_sentiment <- inner_join(word_tokens, pl_words_sentiment, by = 'word')
+slowa_sentiment
+
+slowa_agg_sent <- slowa_sentiment %>% 
+  group_by(id) %>% 
+  summarise(Happiness = sum(mean.Happiness),
+            Anger = sum(mean.Anger),
+            Disgust = sum(mean.Disgust),
+            Sadness = sum(mean.Sadness),
+            Fear = sum(mean.Fear),
+            Disgust = sum(mean.Disgust))
+
+slowa_agg_sent_long <- slowa_agg_sent %>% 
+  gather(Emocja, Wartosc, -id)
+
+ggplot(data = slowa_agg_sent_long, aes(x = id, y = Wartosc, color = Emocja, group = 1)) +
+  geom_point()+
+  geom_smooth()+
+  geom_line()+
+  facet_grid(Emocja ~ ., scales = 'free_y')+
+  theme(axis.text.x = element_text(angle = 60))+
+  xlab("Data")
+
+
+#2
+
+slowa_sentiment_lead <- inner_join(word_tokens, slownik_wydzwieku, by = c('word' = 'slowo'))
+slowa_sentiment_lead
+
+slowa_sentiment_lead <- slowa_sentiment_lead %>% 
+  group_by(word, id) %>% 
+  summarise(sent_bin = sum(sent_bin),
+            sent_dysk = sum(sent_dysk),
+            sent_so_pmi = sum(sent_so_pmi))
+
+
+
+
+ggplot(data = slowa_sentiment_lead, aes(x = id, y = sent_bin, color = sent_bin, group = 1)) +
+  geom_line()+
+  geom_smooth()+
+  geom_point()+
+  theme(axis.text.x = element_text(angle = 60))+
+  xlab("data")+
+  ylab("wartosc")
+  
+
+
+ggplot(data = slowa_sentiment_lead, aes(x = id, y = sent_dysk, color = sent_dysk, group = 1)) +
+  geom_line()+
+  geom_smooth()+
+  geom_point()+
+  theme(axis.text.x = element_text(angle = 60))+
+  xlab("data")+
+  ylab("wartosc")
+
+
+ggplot(data = slowa_sentiment_lead, aes(x = id, y = sent_so_pmi, color = sent_so_pmi, group = 1)) +
+  geom_line()+
+  geom_smooth()+
+  geom_point()+
+  theme(axis.text.x = element_text(angle = 60))+
+  xlab("data")+
+  ylab("wartosc")
+
+
+#analiza sentymentu for body
+
+slowa_sentiment_2 <- inner_join(word_tokens_2, pl_words_sentiment, by = 'word')
+slowa_sentiment_2
+
+slowa_agg_sent_2 <- slowa_sentiment_2 %>% 
+  group_by(id) %>% 
+  summarise(Happiness = sum(mean.Happiness),
+            Anger = sum(mean.Anger),
+            Disgust = sum(mean.Disgust),
+            Sadness = sum(mean.Sadness),
+            Fear = sum(mean.Fear),
+            Disgust = sum(mean.Disgust))
+
+
+slowa_agg_sent_long_2 <- slowa_agg_sent_2 %>% 
+  gather(Emocja, Wartosc, -id)
+
+ggplot(data = slowa_agg_sent_long_2, aes(x = id, y = Wartosc, color = Emocja, group = 1)) +
+  geom_point()+
+  geom_smooth()+
+  geom_line()+
+  facet_grid(Emocja ~ ., scales = 'free_y')+
+  theme(axis.text.x = element_text(angle = 60))+
+  xlab("Data") 
+
+
+
+#2
+
+slowa_sentiment_body <- inner_join(word_tokens_2, slownik_wydzwieku, by = c('word' = 'slowo'))
+slowa_sentiment_body
+
+slowa_sentiment_body <- slowa_sentiment_body %>% 
+  group_by(word, id) %>% 
+  summarise(sent_bin = sum(sent_bin),
+            sent_dysk = sum(sent_dysk),
+            sent_so_pmi = sum(sent_so_pmi))
+
+
+ggplot(data = slowa_sentiment_body, aes(x = id, y = sent_bin, color = sent_bin, group = 1)) +
+  geom_line()+
+  geom_smooth()+
+  geom_point()+
+  theme(axis.text.x = element_text(angle = 60))+
+  xlab("data")+
+  ylab("wartosc")
+
+
+
+ggplot(data = slowa_sentiment_body, aes(x = id, y = sent_dysk, color = sent_dysk, group = 1)) +
+  geom_line()+
+  geom_smooth()+
+  geom_point()+
+  theme(axis.text.x = element_text(angle = 60))+
+  xlab("data")+
+  ylab("wartosc")
+
+
+ggplot(data = slowa_sentiment_body, aes(x = id, y = sent_so_pmi, color = sent_so_pmi, group = 3)) +
+  geom_line()+
+  geom_smooth()+
+  geom_point()+
+  theme(axis.text.x = element_text(angle = 60))+
+  xlab("data")+
+  ylab("wartosc")
+
+
+
+
+
+
+
+#LDA dla body
+
+dtm <- DocumentTermMatrix(dfCorpus, control = list(weighting = weightTf))
+dtm
+
+
+topic_minutes <- LDA(dtm, k = 4, control = list(seed = 1234))
+topic_minutes
+
+
+mi_topics <- tidy(topic_minutes, matrix = "beta") 
+mi_topics
+
+
+
+top_terms <- mi_topics %>%
+  group_by(topic) %>% 
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+top_terms
+
+top_terms %>%
+  mutate(term = reorder(term, beta)) %>% 
+  ggplot(aes(term, beta, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip() 
+
+beta_spread <- mi_topics %>%
+  mutate(topic = paste0("topic", topic)) %>% 
+  spread(topic, beta) %>%
+  filter(topic1 > .001 | topic2 > .001) %>% 
+  mutate(log_ratio = log2(topic2 / topic1)) 
+beta_spread 
+
+
+top_beta_spread <- beta_spread %>% 
+  arrange(desc(abs(log_ratio))) %>% 
+  group_by(log_ratio) %>% 
+  head(20) %>% 
+  ungroup %>% 
+  mutate(term = reorder(term, log_ratio))
+
+
+ggplot(data = top_beta_spread, aes(term, log_ratio, fill = log_ratio > 0)) +
+  geom_col(show.legend = FALSE) +
+  xlab("Słowo") +
+  ylab("Stosunek logarytmu beta") +
+  coord_flip()
+
+mi_class <- tidy(topic_minutes, matrix = "gamma") 
+mi_class
+
+
+mi_class %>% 
+  arrange(topic, desc(gamma))
+
+wyniki_gamma <- left_join(dataframe, mi_class, by = c('id' = 'document'))  %>% 
+  select(id, year, month, data, gamma, topic)
+
+
+wyniki_gamma$dzien <- format(as.Date(wyniki_gamma$id), "%A")
+
+ggplot(data = wyniki_gamma, aes(x = dzien, y = gamma, color = factor(topic))) +
+  geom_boxplot() +
+  geom_hline(yintercept = mean(wyniki_gamma$gamma), color = 'red', linetype = 'dashed')
+
+
+#saving charts
+
+plots.dir.path <- list.files(tempdir(), pattern="rs-graphics", full.names = TRUE); 
+plots.png.paths <- list.files(plots.dir.path, pattern=".png", full.names = TRUE)
+file.copy(from=plots.png.paths, to="C:/Users/48502/Desktop/studia/r/projekt/dane/Zaliczenie/wykresy")
+
